@@ -1,6 +1,6 @@
 names = ['truong', 'george', 'huy']
 names.each do |x|
-	if name == 'george'
+	if x == 'george'
 		puts 'Break!'
 		break
 	end
