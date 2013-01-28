@@ -31,15 +31,23 @@ Mongoid.load!("config/mongoid.yml", :production);
   end
   class Sinhvien
     include Mongoid::Document    
-    field :masinhvien, type: String
+    field :masinhvien, type: String 
     has_and_belongs_to_many :lopmonhocs    
-    has_and_belongs_to_many :slots
+    has_and_belongs_to_many :slots  
+    has_many :tinhtrangs
+  end  
+  class Tinhtrang
+    include Mongoid::Document
+    field :tinhtrang, type: Integer
+    belongs_to :sinhvien
+    belongs_to :slot
   end
   class Slot
     include Mongoid::Document
     field :batdau, type: DateTime
     has_and_belongs_to_many :sinhviens
-    belongs_to :lopmonhoc    
+    belongs_to :lopmonhoc  
+    has_many :tinhtrangs  
   end
   @@tiets = ['06:30','07:20','08:10','09:05','09:55','10:45','12:50','13:40','14:30','15:25','16:15','17:05'];
   @@htiets = @@tiets.map {|h| DateTime.strptime(h,"%H:%M")}  
@@ -47,7 +55,17 @@ Mongoid.load!("config/mongoid.yml", :production);
 before do      
   content_type 'application/json'
 end
-
+get '/tinhtrang' do
+  Sinhvien.each do |sv|
+    next if (sv.slots and sv.slots.size == 0)
+    sv.slots.each do |sl|
+      tt = Tinhtrang.find_or_create_by(sinhvien_id: sv.id, slot_id: sl.id)
+      tt.update_attributes(tinhtrang: 0)
+      sv.tinhtrangs << tt
+      sl.tinhtrangs << tt      
+    end
+  end
+end
 get '/capnhattkb' do 
   client = Savon::Client.new do |wsdl, http|
     wsdl.document = "http://10.1.0.238:8082/HPUWebService.asmx?wsdl"
@@ -80,12 +98,12 @@ get '/capnhattkb' do
           ngaybatdau = DateTime.new(ngaybatdau.year, ngaybatdau.month, ngaybatdau.day,
             @@htiets[index].hour, @@htiets[index].minute) + v;
           ngayketthuc = DateTime.strptime(item[:ngay_ket_thuc].strip,"%d/%m/%Y");
-          sl = Slot.find_or_create_by(batdau: Time.zone.parse(ngaybatdau.to_s), lopmonhoc_id: lop.id)                                  
+          sl = Slot.find_or_create_by(batdau: Time.parse(ngaybatdau.to_s), lopmonhoc_id: lop.id)                                  
           lop.slots << sl               
           dt = ngaybatdau
           while (dt + 7) < ngayketthuc do
             dt = DateTime.new(dt.year, dt.month, dt.day , dt.hour, dt.minute) + 7;
-            sl = Slot.find_or_create_by(batdau: Time.zone.parse(dt.to_s), lopmonhoc_id: lop.id)                
+            sl = Slot.find_or_create_by(batdau: Time.parse(dt.to_s), lopmonhoc_id: lop.id)                
             lop.slots << sl
           end
         end
@@ -120,13 +138,22 @@ get '/sinhvien/truc/?' do
     sinhviens = lop.sinhviens.shuffle
     slots = lop.slots if lop 
     count = sinhviens.size if sinhviens
+    next if count == 0
     temp = 0
+    ss = slots.size
+    next if ss == 0
+    iid = ss/count + 1
     if (count > 0 and slots.size > 0) then
       slots.each do |slot|   
-        tt = (count >= 3) ? 3 : count;   
+        tt = (iid < 3) ? 3 : iid;           
         tt.times do         
-          if (temp >= count) then  temp = 0; end
-          slot.sinhviens << Sinhvien.find_by(masinhvien: sinhviens[temp].masinhvien)
+          if (temp >= count) then  temp = 0; end          
+          sv = Sinhvien.find_by(masinhvien: sinhviens[temp].masinhvien)
+          slot.sinhviens << sv 
+          tt = Tinhtrang.find_or_create_by(sinhvien_id: sv.id, slot_id: slot.id)
+          tt.update_attributes(tinhtrang: 0)
+          sv.tinhtrangs << tt
+          slot.tinhtrangs << tt   
           temp = temp + 1
         end
       end
@@ -142,18 +169,15 @@ get '/sinhviens/?' do
 end
 get '/lop/:malop' do |malop|
   ml = malop.strip
-
   lop = Lopmonhoc.find_by(malop: ml)
-
-  return lop.slots.map {|sl| {:batdau => sl.batdau.new_offset(Rational(utc_offset, 24)), :sv => sl.sinhviens.map {
+  return lop.slots.map {|sl| {:batdau => sl.batdau.new_offset(Rational(0, 24)), :sv => sl.sinhviens.map {
       |sv| sv.masinhvien 
     } } }.to_json
 end
 get '/sinhvien/:sv' do |sv|
-  msv = sv.strip
-  utc_offset = 0
+  msv = sv.strip  
   ssv = Sinhvien.find_by(masinhvien: msv)
   puts ssv.slots[0].batdau.to_s 
-  return ssv.slots.map {|sl| {:batdau => sl.batdau.new_offset(Rational(utc_offset, 24)), :lop => sl.lopmonhoc.malop } }.to_json
+  return ssv.slots.map {|sl| {:batdau => sl.batdau.new_offset(Rational(0, 24)), :lop => sl.lopmonhoc.malop } }.to_json
 end
 
