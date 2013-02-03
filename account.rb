@@ -76,11 +76,11 @@ class SendMail
   def self.perform(to, token, reason)	
   		puts "sending email to #{to} with token #{token} with reason #{reason}" 
 
-     Pony.mail(:to => to, :from => 'hoangdung1987@gmail.com', :via => :smtp, :smtp => {
+     Pony.mail(:to => to, :from => '#######@gmail.com', :via => :smtp, :smtp => {
 	  :host     => 'smtp.gmail.com',
 	  :port     => '587',
-	  :user     => 'hoangdung1987@gmail.com',
-	  :password => 'revskill123',
+	  :user     => '########@gmail.com',
+	  :password => '#########',
 	  :auth     => :plain,           # :plain, :login, :cram_md5, no auth by default
 	  :domain   => "localhost:3002"     # the HELO domain provided by the client to the server
 	}, :body => erb(reason))
